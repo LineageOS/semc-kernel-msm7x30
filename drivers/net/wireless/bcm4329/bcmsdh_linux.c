@@ -197,7 +197,6 @@ int bcmsdh_probe(struct device *dev)
 #else
 	 irq_flags = IRQF_TRIGGER_FALLING;
 #endif /* HW_OOB */
-	/* Get customer specific OOB IRQ parametres: IRQ number as IRQ type */
 	irq = dhd_customer_oob_irq_map(&irq_flags);
 	if  (irq < 0) {
 		SDLX_MSG(("%s: Host irq is not defined\n", __FUNCTION__));
@@ -304,7 +303,7 @@ int bcmsdh_remove(struct device *dev)
 
 #if !defined(BCMLXSDMMC) || defined(OOB_INTR_ONLY)
 	dev_set_drvdata(dev, NULL);
-#endif /* !defined(BCMLXSDMMC) || defined(OOB_INTR_ONLY) */
+#endif /* !defined(BCMLXSDMMC) */
 
 	return 0;
 }
@@ -356,7 +355,7 @@ extern uint sd_pci_slot;	/* Force detection to a particular PCI */
 				/* usable at a time */
 				/* Upper word is bus number, */
 				/* lower word is slot number */
-				/* Default value of 0xffffffff turns this */
+				/* Default value of 0xFFFFffff turns this */
 				/* off */
 module_param(sd_pci_slot, uint, 0);
 
@@ -482,11 +481,10 @@ bcmsdh_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	/* error handling */
 err:
-	if (sdhc) {
 	if (sdhc->sdh)
 		bcmsdh_detach(sdhc->osh, sdhc->sdh);
+	if (sdhc)
 		MFREE(osh, sdhc, sizeof(bcmsdh_hc_t));
-	}
 	if (osh)
 		osl_detach(osh);
 	return -ENODEV;
@@ -583,8 +581,6 @@ bcmsdh_unregister(void)
 #endif /* BCMPLATFORM_BUS */
 }
 
-
-
 #if defined(OOB_INTR_ONLY)
 void bcmsdh_oob_intr_set(bool enable)
 {
@@ -615,8 +611,6 @@ static irqreturn_t wlan_oob_irq(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-	WAKE_LOCK_TIMEOUT(dhdp, WAKE_LOCK_TMOUT, 25);
-
 	dhdsdio_isr((void *)dhdp->bus);
 
 	return IRQ_HANDLED;
@@ -628,7 +622,8 @@ int bcmsdh_register_oob_intr(void * dhdp)
 
 	SDLX_MSG(("%s Enter\n", __FUNCTION__));
 
-	/* IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE; */
+/* Example of  HW_OOB for HW2: please refer to your host  specifiction */
+/* sdhcinfo->oob_flags = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE; */
 
 	dev_set_drvdata(sdhcinfo->dev, dhdp);
 
@@ -654,9 +649,9 @@ void bcmsdh_set_irq(int flag)
 		SDLX_MSG(("%s Flag = %d", __FUNCTION__, flag));
 		if (flag) {
 			enable_irq(sdhcinfo->oob_irq);
-			set_irq_wake(sdhcinfo->oob_irq, 1);
+			enable_irq_wake(sdhcinfo->oob_irq);
 		} else {
-			set_irq_wake(sdhcinfo->oob_irq, 0);
+			disable_irq_wake(sdhcinfo->oob_irq);
 			disable_irq(sdhcinfo->oob_irq);
 		}
 	}
@@ -666,12 +661,12 @@ void bcmsdh_unregister_oob_intr(void)
 {
 	SDLX_MSG(("%s: Enter\n", __FUNCTION__));
 
-	if (sdhcinfo->oob_irq_registered == TRUE) {
-	set_irq_wake(sdhcinfo->oob_irq, 0);
-	disable_irq(sdhcinfo->oob_irq);	/* just in case.. */
-	free_irq(sdhcinfo->oob_irq, NULL);
-	sdhcinfo->oob_irq_registered = FALSE;
-}
+	if (sdhcinfo->oob_irq_registered) {
+		set_irq_wake(sdhcinfo->oob_irq, 0);
+		disable_irq(sdhcinfo->oob_irq);	/* just in case.. */
+		free_irq(sdhcinfo->oob_irq, NULL);
+		sdhcinfo->oob_irq_registered = FALSE;
+	}
 }
 #endif /* defined(OOB_INTR_ONLY) */
 /* Module parameters specific to each host-controller driver */
