@@ -57,6 +57,7 @@ enum {
 	MDP_ARGB_8888,    /* ARGB 888 */
 	MDP_RGB_888,      /* RGB 888 planer */
 	MDP_Y_CRCB_H2V2,  /* Y and CrCb, pseudo planer w/ Cr is in MSB */
+	MDP_Y_CRCB_H2V2_ADRENO,
 	MDP_YCRYCB_H2V1,  /* YCrYCb interleave */
 	MDP_Y_CRCB_H2V1,  /* Y and CrCb, pseduo planer w/ Cr is in MSB */
 	MDP_Y_CBCR_H2V1,   /* Y and CrCb, pseduo planer w/ Cr is in MSB */
@@ -74,6 +75,14 @@ enum {
 enum {
 	PMEM_IMG,
 	FB_IMG,
+};
+
+enum {
+	HSIC_HUE = 0,
+	HSIC_SAT,
+	HSIC_INT,
+	HSIC_CON,
+	NUM_HSIC_PARAM,
 };
 
 /* mdp_blit_req flag values */
@@ -174,6 +183,7 @@ struct msmfb_data {
 	int id;
 	uint32_t flags;
 	uint32_t priv;
+	uint32_t iova;
 };
 
 #define MSMFB_NEW_REQUEST -1
@@ -181,6 +191,20 @@ struct msmfb_data {
 struct msmfb_overlay_data {
 	uint32_t id;
 	struct msmfb_data data;
+	uint32_t version_key;
+	struct msmfb_data plane1_data;
+	struct msmfb_data plane2_data;
+};
+
+struct dpp_ctrl {
+	/*
+	 *'sharp_strength' has inputs = -128 <-> 127
+	 *  Increasingly positive values correlate with increasingly sharper
+	 *  picture. Increasingly negative values correlate with increasingly
+	 *  smoothed picture.
+	 */
+	int8_t sharp_strength;
+	int8_t hsic_params[NUM_HSIC_PARAM];
 };
 
 struct msmfb_img {
@@ -200,6 +224,7 @@ struct mdp_overlay {
 	uint32_t flags;
 	uint32_t id;
 	uint32_t user_data[8];
+	struct dpp_ctrl dpp;
 };
 
 struct mdp_histogram {
