@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "AAAAUH//+jA\u003d",
+        "filename": "include/linux/msm_mdp.h",
+        "patchSetId": 1
+      },
+      "lineNbr": 232,
+      "author": {
+        "id": 19
+      },
+      "writtenOn": "2012-06-15T14:22:20Z",
+      "side": 1,
+      "message": "This fix overlay ioctl but broke camera preview",
+      "revId": "33bfe23c0b536a3186cf7bd61be6f09c1eccb670",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
