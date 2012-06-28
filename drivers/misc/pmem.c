@@ -283,7 +283,7 @@ static struct {
 #ifdef CONFIG_KERNEL_PMEM_SMI_REGION
 	{ PMEM_KERNEL_SMI_DATA_NAME,
 		PMEM_MEMTYPE_SMI,
-		PMEM_INVALID_MEMTYPE, /* MUST be set invalid if no fallback */
+		PMEM_MEMTYPE_EBI1, /* MUST be set invalid if no fallback */
 		-1 },
 #endif
 	{ PMEM_KERNEL_EBI1_DATA_NAME,
@@ -400,8 +400,6 @@ static ssize_t show_pmem_allocator_type(int id, char *buf)
 		return scnprintf(buf, PAGE_SIZE, "%s\n", "Buddy Bestfit");
 	case  PMEM_ALLOCATORTYPE_BITMAP:
 		return scnprintf(buf, PAGE_SIZE, "%s\n", "Bitmap");
-	case PMEM_ALLOCATORTYPE_SYSTEM:
-		return scnprintf(buf, PAGE_SIZE, "%s\n", "System heap");
 	default:
 		return scnprintf(buf, PAGE_SIZE,
 			"??? Invalid allocator type (%d) for this region! "
@@ -576,20 +574,9 @@ static struct attribute *pmem_bitmap_attrs[] = {
 	NULL
 };
 
-static struct attribute *pmem_system_attrs[] = {
-	PMEM_COMMON_SYSFS_ATTRS,
-
-	NULL
-};
-
 static struct kobj_type pmem_bitmap_ktype = {
 	.sysfs_ops = &pmem_ops,
 	.default_attrs = pmem_bitmap_attrs,
-};
-
-static struct kobj_type pmem_system_ktype = {
-	.sysfs_ops = &pmem_ops,
-	.default_attrs = pmem_system_attrs,
 };
 
 static int pmem_allocate_from_id(const int id, const unsigned long size,
@@ -689,7 +676,7 @@ static int has_allocation(struct file *file)
 	 * means that file is guaranteed not to be NULL upon entry!!
 	 * check is_pmem_file first if not accessed via pmem_file_ops */
 	struct pmem_data *pdata = file->private_data;
-	return pdata && pdata->index != -1;
+	return pdata && pdata->index >= 0;
 }
 
 static int is_master_owner(struct file *file)
@@ -705,8 +692,7 @@ static int is_master_owner(struct file *file)
 	master_file = fget_light(data->master_fd, &put_needed);
 	if (master_file && data->master_file == master_file)
 		ret = 1;
-	if (master_file)
-		fput_light(master_file, put_needed);
+	fput_light(master_file, put_needed);
 	return ret;
 }
 
@@ -858,27 +844,6 @@ static int pmem_free_bitmap(int id, int bitnum)
 	return -1;
 }
 
-static int pmem_free_system(int id, int index)
-{
-	/* caller should hold the lock on arena_mutex! */
-	struct alloc_list *item;
-
-	DLOG("index %d\n", index);
-	if (index != 0)
-		item = (struct alloc_list *)index;
-	else
-		return 0;
-
-	if (item->vaddr != NULL) {
-		iounmap(item->vaddr);
-		kfree(__va(item->addr));
-		list_del(&item->allocs);
-		kfree(item);
-	}
-
-	return 0;
-}
-
 static int pmem_free_space_bitmap(int id, struct pmem_freespace *fs)
 {
 	int i, j;
@@ -923,14 +888,6 @@ static int pmem_free_space_bitmap(int id, struct pmem_freespace *fs)
 		else
 			alloc_start = next_alloc;
 	}
-
-	return 0;
-}
-
-static int pmem_free_space_system(int id, struct pmem_freespace *fs)
-{
-	fs->total = pmem[id].size;
-	fs->largest = pmem[id].size;
 
 	return 0;
 }
@@ -1373,64 +1330,6 @@ leave:
 	return bitnum;
 }
 
-static int pmem_allocator_system(const int id,
-		const unsigned long len,
-		const unsigned int align)
-{
-	/* caller should hold the lock on arena_mutex! */
-	struct alloc_list *list;
-	unsigned long aligned_len;
-	int count = SYSTEM_ALLOC_RETRY;
-	void *buf;
-
-	DLOG("system id %d, len %ld, align %u\n", id, len, align);
-
-	if ((pmem[id].allocator.system_mem.used + len) > pmem[id].size) {
-		DLOG("requested size would be larger than quota\n");
-		return -1;
-	}
-
-	/* Handle alignment */
-	aligned_len = len + align;
-
-	/* Attempt allocation */
-	list = kmalloc(sizeof(struct alloc_list), GFP_KERNEL);
-	if (list == NULL) {
-		printk(KERN_ERR "pmem: failed to allocate system metadata\n");
-		return -1;
-	}
-	list->vaddr = NULL;
-
-	buf = NULL;
-	while ((buf == NULL) && count--) {
-		buf = kmalloc((aligned_len), GFP_KERNEL);
-		if (buf == NULL) {
-			DLOG("pmem: kmalloc %d temporarily failed len= %ld\n",
-				count, aligned_len);
-		}
-	}
-	if (!buf) {
-		printk(KERN_CRIT "pmem: kmalloc failed for id= %d len= %ld\n",
-			id, aligned_len);
-		kfree(list);
-		return -1;
-	}
-	list->size = aligned_len;
-	list->addr = (void *)__pa(buf);
-	list->aaddr = (void *)(((unsigned int)(list->addr) + (align - 1)) &
-			~(align - 1));
-
-	if (!pmem[id].cached)
-		list->vaddr = ioremap(__pa(buf), aligned_len);
-	else
-		list->vaddr = ioremap_cached(__pa(buf), aligned_len);
-
-	INIT_LIST_HEAD(&list->allocs);
-	list_add(&list->allocs, &pmem[id].allocator.system_mem.alist);
-
-	return (int)list;
-}
-
 static pgprot_t phys_mem_access_prot(struct file *file, pgprot_t vma_prot)
 {
 	int id = get_id(file);
@@ -1463,16 +1362,8 @@ static unsigned long pmem_start_addr_bitmap(int id, struct pmem_data *data)
 	return data->index * pmem[id].quantum + pmem[id].base;
 }
 
-static unsigned long pmem_start_addr_system(int id, struct pmem_data *data)
-{
-	return (unsigned long)(((struct alloc_list *)(data->index))->aaddr);
-}
-
 static void *pmem_start_vaddr(int id, struct pmem_data *data)
 {
-	if (pmem[id].allocator_type == PMEM_ALLOCATORTYPE_SYSTEM)
-		return ((struct alloc_list *)(data->index))->vaddr;
-	else
 	return pmem[id].start_addr(id, data) - pmem[id].base + pmem[id].vbase;
 }
 
@@ -1507,18 +1398,6 @@ static unsigned long pmem_len_bitmap(int id, struct pmem_data *data)
 		pr_alert("pmem: %s: can't find bitnum %d in "
 			"alloc'd array!\n", __func__, data->index);
 #endif
-	return ret;
-}
-
-static unsigned long pmem_len_system(int id, struct pmem_data *data)
-{
-	unsigned long ret = 0;
-
-	mutex_lock(&pmem[id].arena_mutex);
-
-	ret = ((struct alloc_list *)data->index)->size;
-	mutex_unlock(&pmem[id].arena_mutex);
-
 	return ret;
 }
 
@@ -1949,20 +1828,6 @@ void flush_pmem_file(struct file *file, unsigned long offset, unsigned long len)
 
 	vaddr = pmem_start_vaddr(id, data);
 
-	if (pmem[id].allocator_type == PMEM_ALLOCATORTYPE_SYSTEM) {
-		dmac_flush_range(vaddr,
-			(void *)((unsigned long)vaddr +
-				 ((struct alloc_list *)(data->index))->size));
-#ifdef CONFIG_OUTER_CACHE
-		phy_start = pmem_start_addr_system(id, data);
-
-		phy_end = phy_start +
-			((struct alloc_list *)(data->index))->size;
-
-		outer_flush_range(phy_start, phy_end);
-#endif
-		goto end;
-	}
 	/* if this isn't a submmapped file, flush the whole thing */
 	if (unlikely(!(data->flags & PMEM_FLAGS_CONNECTED))) {
 		dmac_flush_range(vaddr, vaddr + pmem[id].len(id, data));
@@ -2156,11 +2021,6 @@ static int pmem_kapi_free_index_bitmap(const int32_t physaddr, int id)
 	return (physaddr >= pmem[id].base &&
 		physaddr < (pmem[id].base + pmem[id].size)) ?
 		bit_from_paddr(id, physaddr) : -1;
-}
-
-static int pmem_kapi_free_index_system(const int32_t physaddr, int id)
-{
-	return 0;
 }
 
 int pmem_kfree(const int32_t physaddr)
@@ -3121,35 +2981,6 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 			"%lu, quanta size %u\n",
 			id, pdata->name, pmem[id].allocator.bitmap.bitmap_free,
 			pmem[id].size, pmem[id].quantum);
-		break;
-
-	case PMEM_ALLOCATORTYPE_SYSTEM:
-
-#ifdef CONFIG_MEMORY_HOTPLUG
-		goto err_no_mem;
-#endif
-
-		INIT_LIST_HEAD(&pmem[id].allocator.system_mem.alist);
-
-		pmem[id].allocator.system_mem.used = 0;
-		pmem[id].vbase = NULL;
-
-		if (kobject_init_and_add(&pmem[id].kobj,
-				&pmem_system_ktype, NULL,
-				"%s", pdata->name))
-			goto out_put_kobj;
-
-		pmem[id].allocate = pmem_allocator_system;
-		pmem[id].free = pmem_free_system;
-		pmem[id].free_space = pmem_free_space_system;
-		pmem[id].kapi_free_index = pmem_kapi_free_index_system;
-		pmem[id].len = pmem_len_system;
-		pmem[id].start_addr = pmem_start_addr_system;
-		pmem[id].num_entries = 0;
-		pmem[id].quantum = PAGE_SIZE;
-
-		DLOG("system allocator id %d (%s), raw size %lu\n",
-			id, pdata->name, pmem[id].size);
 		break;
 
 	default:
