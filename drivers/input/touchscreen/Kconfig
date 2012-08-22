@@ -694,6 +694,13 @@ config TOUCHSCREEN_CYTTSP_CORE
 	help
 	  Always activated for Cypress TTSP touchscreen
 
+config TOUCHSCREEN_CYTTSP_CORE_SEMC_IYOKAN
+	default y
+	bool "Cypress TTSP touchscreen core SEMC IYOKAN"
+	depends on TOUCHSCREEN_CYTTSP_I2C || TOUCHSCREEN_CYTTSP_SPI
+	help
+	  Workaround for broken touch drivers for SEMC IYOKAN
+
 config TOUCHSCREEN_CYTTSP_MAX_X
 	default 479
 	int "Cypress TTSP touchscreen X resolution"
@@ -708,6 +715,21 @@ config TOUCHSCREEN_CYTTSP_MAX_Z
 	default 100
 	int "Cypress TTSP touchscreen Z resolution"
 	depends on TOUCHSCREEN_CYTTSP_CORE
+
+config TOUCHSCREEN_CYTTSP_SEMC_IYOKAN_MAX_X
+	default 479
+	int "Cypress TTSP touchscreen X resolution"
+	depends on TOUCHSCREEN_CYTTSP_CORE_SEMC_IYOKAN
+
+config TOUCHSCREEN_CYTTSP_SEMC_IYOKAN_MAX_Y
+	default 853
+	int "Cypress TTSP touchscreen Y resolution"
+	depends on TOUCHSCREEN_CYTTSP_CORE_SEMC_IYOKAN
+
+config TOUCHSCREEN_CYTTSP_SEMC_IYOKAN_MAX_Z
+	default 100
+	int "Cypress TTSP touchscreen Z resolution"
+	depends on TOUCHSCREEN_CYTTSP_CORE_SEMC_IYOKAN
 
 config TOUCHSCREEN_CYTTSP_KEY
 	default n
@@ -727,4 +749,9 @@ config TOUCHSCREEN_CYTTSP_ACT_INTRVL
 	default 0
 	int "Cypress TTSP active interval"
 	depends on TOUCHSCREEN_CYTTSP_CORE
+
+config TOUCHSCREEN_CYTTSP_SEMC_IYOKAN_ACT_INTRVL
+	default 0
+	int "Cypress TTSP active interval"
+	depends on TOUCHSCREEN_CYTTSP_CORE_SEMC_IYOKAN
 endif

@@ -17,9 +17,9 @@ struct cyttsp_platform_data cyttsp_data = {
 	.init = cyttsp_init,
 	.mt_sync = input_mt_sync,
 	/* TODO: max values should be retrieved from the firmware */
-	.maxx = CONFIG_TOUCHSCREEN_CYTTSP_MAX_X,
-	.maxy = CONFIG_TOUCHSCREEN_CYTTSP_MAX_Y,
-	.maxz = CONFIG_TOUCHSCREEN_CYTTSP_MAX_Z,
+	.maxx = CONFIG_TOUCHSCREEN_CYTTSP_SEMC_IYOKAN_MAX_X,
+	.maxy = CONFIG_TOUCHSCREEN_CYTTSP_SEMC_IYOKAN_MAX_Y,
+	.maxz = CONFIG_TOUCHSCREEN_CYTTSP_SEMC_IYOKAN_MAX_Z,
 	.flags = 0,
 	.gen = CY_GEN3,
 	.use_st = 0,
@@ -28,7 +28,7 @@ struct cyttsp_platform_data cyttsp_data = {
 	.use_hndshk = 0,
 	.use_timer = 0,
 	.use_sleep = 1,
-	.use_gestures = 0,
+	.use_gestures = 1,
 	.use_load_file = 1,
 	.use_force_fw_update = 0,
 	/* activate up groups */
@@ -38,7 +38,7 @@ struct cyttsp_platform_data cyttsp_data = {
 	/* change act_intrvl to customize the Active power state
 	 * scanning/processing refresh interval for Operating mode
 	 */
-	.act_intrvl = CONFIG_TOUCHSCREEN_CYTTSP_ACT_INTRVL,
+	.act_intrvl = CONFIG_TOUCHSCREEN_CYTTSP_SEMC_IYOKAN_ACT_INTRVL,
 	/* change tch_tmout to customize the touch timeout for the
 	 * Active power state for Operating mode
 	 */

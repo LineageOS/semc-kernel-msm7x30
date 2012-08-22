@@ -117,7 +117,7 @@
 #include <linux/apds9702.h>
 #endif
 #include <linux/i2c/akm8975.h>
-#ifdef CONFIG_TOUCHSCREEN_CYTTSP_CORE
+#if defined(CONFIG_TOUCHSCREEN_CYTTSP_CORE) || defined(CONFIG_TOUCHSCREEN_CYTTSP_CORE_SEMC_IYOKAN)
 #include <linux/cyttsp.h>
 #endif
 #include <mach/mddi_novatek_fwvga.h>
